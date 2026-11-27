@@ -1,29 +1,103 @@
 # Waradise
 
-Seed for an online store. The open-source commerce engine is [Medusa](https://medusajs.com) (TypeScript): product catalog, cart, checkout, and admin API. A Next.js storefront sits in front of it.
+Online store built with [Medusa](https://medusajs.com) v2 (TypeScript) as the open-source commerce backend (product catalog, cart, checkout, and admin API) and a Next.js storefront in front of it.
 
-`index.html` is only a hello-world placeholder so this repository has a default branch. Cloud agents clone a branch; an empty GitHub repo has nothing to clone.
+## Project layout
 
-The Medusa app itself should be scaffolded by a Cursor cloud agent (see below), not committed by hand from a laptop, so the cloud run is the proof of concept.
+- `store/apps/backend` — Medusa v2 server and admin dashboard (`http://localhost:9000/app`)
+- `store/apps/storefront` — Next.js starter storefront (`http://localhost:8000`)
 
-## Scaffold the store with a cloud agent
+## Local setup
 
-After GitHub is connected in Cursor and the account can run Cloud Agents:
+### Prerequisites
 
-1. Open [cursor.com/agents](https://cursor.com/agents).
-2. Select `alfonzjanfrithz/waradise` and the `main` branch.
-3. Paste this prompt:
+- Node.js v22.22+
+- `pnpm` v10+
+- PostgreSQL 15+
 
-```text
-Scaffold a Medusa v2 online store in this repo.
+### 1. Start PostgreSQL and create the database
 
-Use the official create-medusa-app flow (current Medusa v2, not v1).
-Include the Next.js storefront. Use PostgreSQL.
-Replace the placeholder index.html; do not leave a second competing storefront.
-Add a short README section: how to start Postgres, the Medusa backend, and the storefront locally.
-Open a pull request. Do not push to main.
+On Fedora:
+
+```bash
+sudo dnf install -y postgresql-server
+sudo postgresql-setup --initdb
+sudo systemctl enable --now postgresql
+sudo -u postgres createdb medusa_store
 ```
 
-4. Review the pull request the agent opens. Merge it when it looks right.
+On Ubuntu/Debian:
 
-Cloud Agents and Automations need a plan that includes them (Premium, Teams, Enterprise, or a legacy paid plan). Free and Plus do not run them. Docs: https://cursor.com/docs/cloud-agent
+```bash
+sudo apt-get update && sudo apt-get install -y postgresql postgresql-client
+sudo service postgresql start
+sudo -u postgres psql -c "ALTER USER postgres WITH PASSWORD 'postgres';"
+sudo -u postgres createdb medusa_store
+```
+
+Or with Docker / Podman:
+
+```bash
+docker run -d --name waradise-postgres \
+  -e POSTGRES_USER=postgres \
+  -e POSTGRES_PASSWORD=postgres \
+  -e POSTGRES_DB=medusa_store \
+  -p 5432:5432 \
+  postgres:16-alpine
+```
+
+### 2. Install dependencies
+
+```bash
+cd store
+pnpm install
+```
+
+### 3. Configure the backend and run migrations
+
+```bash
+cp apps/backend/.env.template apps/backend/.env
+```
+
+Update `apps/backend/.env` with your PostgreSQL `DATABASE_URL` and random values for `JWT_SECRET` and `COOKIE_SECRET` (for example via `openssl rand -hex 32`). Keep `.env` out of git.
+
+Run migrations (this also seeds the default `MYR` currency, `Malaysia` region, and starter data) and create an admin user:
+
+```bash
+cd apps/backend
+pnpm exec medusa db:migrate
+pnpm exec medusa user -e admin@example.com -p supersecret
+```
+
+### 4. Start the Medusa backend
+
+```bash
+cd store/apps/backend
+pnpm dev
+```
+
+Open the admin dashboard at `http://localhost:9000/app`, sign in, and copy your publishable API key from **Settings > Publishable API Keys**.
+
+### 5. Configure and start the Next.js storefront
+
+```bash
+cp store/apps/storefront/.env.template store/apps/storefront/.env.local
+```
+
+Set `NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY` in `store/apps/storefront/.env.local` to the key copied from Medusa Admin (`NEXT_PUBLIC_DEFAULT_REGION` defaults to `my` for Malaysia / MYR).
+
+Start the storefront:
+
+```bash
+cd store/apps/storefront
+pnpm dev
+```
+
+The storefront runs at `http://localhost:8000` (Malaysia region at `http://localhost:8000/my`).
+
+You can also run both backend and storefront together from `store/`:
+
+```bash
+cd store
+pnpm dev
+```
